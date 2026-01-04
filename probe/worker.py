@@ -10,8 +10,8 @@ class SayHello:
         return f"Hello, {name}!"
 
 async def main():
-    client = await Client.connect("127.0.0.1:7233")
-    print("Directly connected to Temporal Server on 127.0.0.1:7233")
+    client = await Client.connect("temporal.motaniq.com:7233",tls=True)
+    print("Connected to Temporal Server on temporal.motaniq.com:7233")
     
     worker = Worker(
         client,

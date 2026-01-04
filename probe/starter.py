@@ -2,7 +2,7 @@ import asyncio
 from temporalio.client import Client
 
 async def main():
-    client = await Client.connect("127.0.0.1:7233")
+    client = await Client.connect("temporal.motaniq.com:7233",tls=True)
 
     result = await client.execute_workflow(
         "SayHello",
