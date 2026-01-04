@@ -30,8 +30,6 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: temporal
-    # volumes:
-    #   - "./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql"
     networks:
       - traefik
     command:
@@ -96,7 +94,6 @@ services:
       - POSTGRES_SEEDS=postgresql
       - ENABLE_ES=true
       - ES_SEEDS=elasticsearch
-    # Uses /bin/sh which is available in the image, and a simple check for the process
     healthcheck:
       test: ["CMD-SHELL", "ps aux | grep -v grep | grep -q temporal-server || exit 1"]
       interval: 10s

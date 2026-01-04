@@ -1,10 +1,23 @@
 ### About
 
-Spins up a temporal cluster, SSL-ed on local network via traefik dns01 challenge.
+This setup spins up a **Temporal cluster** secured with SSL on your local network. It utilizes **Traefik** and the **DNS-01 challenge** to automatically provision and manage Let's Encrypt certificates for your local services.
 
-For traefik dns01 challenge to work, create root folder `letsencrypt`, and add the traefik required files for your DNS provider (e.g Cloudflare: CF_EMAIL.txt and CF_KEY.txt).
+#### Setup Requirements
 
-./letsencrypt/
-|
-|---CF_EMAIL.txt
-|---CF_KEY.txt
+To enable the Traefik DNS-01 challenge, you need to provide credentials for your DNS provider.
+
+1. Create a folder named `letsencrypt` in the project root.
+2. Add your provider's required credential files to that folder. For example, if you are using **Cloudflare**, you will need:
+   - `CF_EMAIL.txt`
+   - `CF_KEY.txt`
+
+#### Project Structure
+
+```text
+.
+├── letsencrypt/
+│   ├── CF_EMAIL.txt
+│   └── CF_KEY.txt
+├── docker-compose.yml
+└── ...
+```
