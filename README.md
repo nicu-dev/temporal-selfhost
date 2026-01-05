@@ -1,3 +1,6 @@
+WIP - DETAILD INSTRUCTIONS ON SETUP TBD
+
+
 ### About
 
 This setup spins up a **Temporal cluster** secured with SSL on your local network. It utilizes **Traefik** and the **DNS-01 challenge** to automatically provision and manage Let's Encrypt certificates for your local services.
