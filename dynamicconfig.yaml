@@ -1,0 +1,6 @@
+frontend.workerversioningdataapis:
+  - value: true
+frontend.workerversioningworkflowapis:
+  - value: true
+system.forcesearchattributescacherefreshonread:
+  - value: true

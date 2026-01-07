@@ -33,16 +33,11 @@ services:
       POSTGRES_DB: temporal
     networks:
       - traefik
-    command:
-      - bash
-      - -c
-      - |
-        docker-entrypoint.sh postgres &
-        sleep 5;
-        psql -U ${POSTGRES_USER} -c 'CREATE DATABASE temporal_visibility;' || true;
-        wait
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER}" ]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d temporal" ]
       interval: 5s
 
   elasticsearch:
@@ -57,12 +52,14 @@ services:
           memory: 1G
     networks:
       - traefik
+    volumes:
+      - elastic_data:/usr/share/elasticsearch/data
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:9200/_cluster/health" ]
       interval: 10s
 
   temporal-setup:
-    image: temporalio/admin-tools:1.22
+    image: temporalio/admin-tools:1.29
     depends_on:
       postgresql:
         condition: service_healthy
@@ -71,37 +68,49 @@ services:
     networks:
       - traefik
     entrypoint: /bin/bash
-    command: >
-      -c " temporal-sql-tool --plugin postgres --ep postgresql -p 5432 -u ${POSTGRES_USER} --pw ${POSTGRES_PASSWORD} --db temporal setup-schema -v 0.0; temporal-sql-tool --plugin postgres --ep postgresql -p 5432 -u ${POSTGRES_USER} --pw ${POSTGRES_PASSWORD} --db temporal update-schema -d ./schema/postgresql/v12/temporal/versioned; temporal-sql-tool --plugin postgres --ep postgresql -p 5432 -u ${POSTGRES_USER} --pw ${POSTGRES_PASSWORD} --db temporal_visibility setup-schema -v 0.0; temporal-sql-tool --plugin postgres --ep postgresql -p 5432 -u ${POSTGRES_USER} --pw ${POSTGRES_PASSWORD} --db temporal_visibility update-schema -d ./schema/postgresql/v12/visibility/versioned;
+    command:
+      - -c
+      - |
+        # Use postgres12 instead of postgres
+        temporal-sql-tool --plugin postgres12 --ep postgresql -p 5432 -u ${POSTGRES_USER} --pw ${POSTGRES_PASSWORD} --db temporal setup-schema -v 0.0 || true
+        temporal-sql-tool --plugin postgres12 --ep postgresql -p 5432 -u ${POSTGRES_USER} --pw ${POSTGRES_PASSWORD} --db temporal update-schema -d ./schema/postgresql/v12/temporal/versioned
 
-      curl -s -X PUT http://elasticsearch:9200/temporal_visibility_v1_dev -H 'Content-Type: application/json' -d '{
-        \"settings\":{\"index\":{\"number_of_replicas\":0}},
-        \"mappings\":{
-          \"properties\":{
-            \"Namespace\":{\"type\":\"keyword\"},
-            \"WorkflowId\":{\"type\":\"keyword\"},
-            \"RunId\":{\"type\":\"keyword\"},
-            \"WorkflowType\":{\"type\":\"keyword\"},
-            \"StartTime\":{\"type\":\"date\"},
-            \"ExecutionTime\":{\"type\":\"date\"},
-            \"CloseTime\":{\"type\":\"date\"},
-            \"ExecutionStatus\":{\"type\":\"keyword\"},
-            \"HistoryLength\":{\"type\":\"long\"},
-            \"TaskQueue\":{\"type\":\"keyword\"},
-            \"NamespaceId\":{\"type\":\"keyword\"},
-            \"TemporalNamespaceDivision\":{\"type\":\"keyword\"},
-            \"TemporalScheduledById\":{\"type\":\"keyword\"},
-            \"TemporalScheduledStartTime\":{\"type\":\"date\"},
-            \"TemporalSchedulePaused\":{\"type\":\"boolean\"},
-            \"ExecutionDuration\":{\"type\":\"long\"},
-            \"StateTransitionCount\":{\"type\":\"long\"},
-            \"HistorySizeBytes\":{\"type\":\"long\"}
+        temporal-sql-tool --plugin postgres12 --ep postgresql -p 5432 -u ${POSTGRES_USER} --pw ${POSTGRES_PASSWORD} --db temporal_visibility setup-schema -v 0.0 || true
+        temporal-sql-tool --plugin postgres12 --ep postgresql -p 5432 -u ${POSTGRES_USER} --pw ${POSTGRES_PASSWORD} --db temporal_visibility update-schema -d ./schema/postgresql/v12/visibility/versioned
+
+        echo "Waiting for Elasticsearch..."
+        until curl -s http://elasticsearch:9200; do sleep 1; done
+
+        curl -s -X PUT http://elasticsearch:9200/temporal_visibility_v1_dev -H 'Content-Type: application/json' -d '{
+          "settings": {"index": {"number_of_replicas": 0}},
+          "mappings": {
+            "properties": {
+              "Namespace": {"type": "keyword"},
+              "WorkflowId": {"type": "keyword"},
+              "RunId": {"type": "keyword"},
+              "WorkflowType": {"type": "keyword"},
+              "StartTime": {"type": "date"},
+              "ExecutionTime": {"type": "date"},
+              "CloseTime": {"type": "date"},
+              "ExecutionStatus": {"type": "keyword"},
+              "HistoryLength": {"type": "long"},
+              "TaskQueue": {"type": "keyword"},
+              "NamespaceId": {"type": "keyword"},
+              "TemporalNamespaceDivision": {"type": "keyword"},
+              "TemporalScheduledById": {"type": "keyword"},
+              "TemporalScheduledStartTime": {"type": "date"},
+              "TemporalSchedulePaused": {"type": "boolean"},
+              "ExecutionDuration": {"type": "long"},
+              "StateTransitionCount": {"type": "long"},
+              "HistorySizeBytes": {"type": "long"},
+              "TemporalWorkerVersioningData": {"type": "keyword"}
+            }
           }
-        }
-      }'; "
+        }'
 
   temporal-server:
-    image: temporalio/server:1.22
+    image: temporalio/server:1.29.2
+    container_name: temporal-server
     depends_on:
       temporal-setup:
         condition: service_completed_successfully
@@ -110,18 +119,36 @@ services:
     networks:
       - traefik
     environment:
-      - DB=postgresql
+      # --- Persistence (Using the exact names from Docker Hub docs) ---
+      - DB=postgres12
+      - POSTGRES_SEEDS=postgresql
+      - DB_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PWD=${POSTGRES_PASSWORD}
-      - POSTGRES_SEEDS=postgresql
+      - DBNAME=temporal
+      - DEFAULT_STORE_TYPE=sql
+
+      # --- Visibility (Elasticsearch) ---
       - ENABLE_ES=true
       - ES_SEEDS=elasticsearch
+      - ES_PORT=9200
+      - ES_SCHEME=http
+      - ES_VERSION=v7
+      - ES_VIS_INDEX=temporal_visibility_v1_dev
+      - VISIBILITY_STORE_TYPE=elasticsearch
+
+      # --- General & Dynamic Config ---
+      - DYNAMIC_CONFIG_FILE_PATH=/etc/temporal/config/dynamicconfig/development.yaml
+      - TEMPORAL_REPLICAS=1
+      - SKIP_DEFAULT_NAMESPACE_CREATION=true
+      - TEMPORAL_ALLOW_NO_AUTH=true
+    volumes:
+      - ./dynamicconfig.yaml:/etc/temporal/config/dynamicconfig/development.yaml
     healthcheck:
-      test: [ "CMD-SHELL", "ps aux | grep -v grep | grep -q temporal-server || exit 1" ]
+      test: [ "CMD", "temporal", "operator", "cluster", "health", "--address", "temporal-server:7233" ]
       interval: 10s
       timeout: 5s
       retries: 10
-      start_period: 30s
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.temporal-grpc.rule=Host(`${DOMAIN}`)"
@@ -130,17 +157,19 @@ services:
       - "traefik.http.routers.temporal-grpc.tls.certresolver=myresolver"
       - "traefik.http.services.temporal-server.loadbalancer.server.port=7233"
       - "traefik.http.services.temporal-server.loadbalancer.server.scheme=h2c"
-
   temporal-bootstrap:
-    image: temporalio/admin-tools:1.22
+    image: temporalio/admin-tools:1.29
     depends_on:
       temporal-server:
         condition: service_healthy
     networks:
       - traefik
     entrypoint: /bin/bash
-    command: >
-      -c " echo 'Waiting for Temporal...'; until temporal operator cluster health --address temporal-server:7233 | grep -q 'SERVING'; do sleep 2; done; echo 'Creating Namespace...'; temporal operator namespace create --address temporal-server:7233 default || true; echo 'Bootstrap Complete.'; "
+    command:
+      - -c
+      - |
+        until temporal operator cluster health --address temporal-server:7233 | grep -q 'SERVING'; do sleep 2; done
+        temporal operator namespace create --address temporal-server:7233 --retention 1d default || true
 
   temporal-ui:
     image: temporalio/ui:2.44.0
@@ -161,3 +190,7 @@ services:
 networks:
   traefik:
     name: traefik
+
+volumes:
+  postgres_data:
+  elastic_data:

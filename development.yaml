@@ -1,0 +1,53 @@
+persistence:
+  defaultStore: default
+  visibilityStore: visibility
+  numHistoryShards: 4
+  datastores:
+    default:
+      sql:
+        pluginName: "postgres"
+        databaseName: "temporal"
+        connectAddr: "postgresql:5432"
+        connectProtocol: "tcp"
+        user: "temporal"
+        password: "password" # Match your .env
+        maxConns: 20
+    visibility:
+      elasticsearch:
+        version: "v7"
+        url: "http://elasticsearch:9200"
+        index: "temporal_visibility_v1_dev"
+
+global:
+  membership:
+    maxJoinDuration: 30s
+    broadcastAddress: "127.0.0.1"
+
+services:
+  frontend:
+    rpc:
+      grpcPort: 7233
+      membershipPort: 6933
+      bindOnIP: "0.0.0.0"
+  history:
+    rpc:
+      grpcPort: 7234
+      membershipPort: 6934
+      bindOnIP: "0.0.0.0"
+  matching:
+    rpc:
+      grpcPort: 7235
+      membershipPort: 6935
+      bindOnIP: "0.0.0.0"
+  worker:
+    rpc:
+      grpcPort: 7239
+      membershipPort: 6939
+      bindOnIP: "0.0.0.0"
+
+clusterMetadata:
+  enableNamespaceNotExists: true
+  clusterName: "active"
+  historyConfig:
+    default:
+      numHistoryShards: 4
