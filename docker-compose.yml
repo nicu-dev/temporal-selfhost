@@ -87,8 +87,8 @@ services:
         until curl -s http://elasticsearch:9200; do sleep 1; done
 
         curl -s -X PUT http://elasticsearch:9200/_template/temporal_visibility_v1_template \
-             -H 'Content-Type: application/json' \
-             -d @/etc/temporal/schema/elasticsearch/visibility/index_template_v7.json
+          -H 'Content-Type: application/json' \
+          -d @/etc/temporal/schema/elasticsearch/visibility/index_template_v7.json
         
         echo "Creating Elasticsearch index..."
         curl -s -X PUT http://elasticsearch:9200/temporal_visibility_v1_dev
@@ -170,6 +170,15 @@ services:
       - traefik
     environment:
       - TEMPORAL_ADDRESS=temporal-server:7233
+      
+      # --- AUTH CONFIGURATION ---
+      - TEMPORAL_AUTH_ENABLED=true
+      - TEMPORAL_AUTH_PROVIDER_URL=https://accounts.google.com
+      - TEMPORAL_AUTH_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - TEMPORAL_AUTH_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - TEMPORAL_AUTH_CALLBACK_URL=https://${DOMAIN}/auth/sso/callback
+      - TEMPORAL_AUTH_SCOPES=openid,profile,email
+
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.temporal-ui.rule=Host(`${DOMAIN}`)"
