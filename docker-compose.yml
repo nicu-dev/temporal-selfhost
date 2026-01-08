@@ -18,7 +18,7 @@ services:
       - "80:80"
       - "443:443"
       - "7233:7233"
-    restart: always
+    restart: unless-stopped
     networks:
       - traefik
     volumes:
@@ -39,7 +39,7 @@ services:
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d temporal" ]
       interval: 5s
-    restart: always
+    restart: unless-stopped
 
   elasticsearch:
     image: elasticsearch:7.16.2
@@ -58,7 +58,7 @@ services:
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:9200/_cluster/health" ]
       interval: 10s
-    restart: always
+    restart: unless-stopped
 
   temporal-setup:
     image: temporalio/admin-tools:1.29
@@ -160,7 +160,7 @@ services:
       - "traefik.http.services.temporal-server.loadbalancer.server.port=7233"
       - "traefik.http.services.temporal-server.loadbalancer.server.scheme=h2c"
       
-    restart: always
+    restart: unless-stopped
     
   temporal-bootstrap:
     image: temporalio/admin-tools:1.29
@@ -191,7 +191,7 @@ services:
       - "traefik.http.routers.temporal-ui.entrypoints=websecure"
       - "traefik.http.routers.temporal-ui.tls.certresolver=myresolver"
       - "traefik.http.services.temporal-ui.loadbalancer.server.port=8080"
-    restart: always
+    restart: unless-stopped
 
 networks:
   traefik:
