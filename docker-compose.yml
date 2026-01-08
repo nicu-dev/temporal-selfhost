@@ -73,42 +73,27 @@ services:
     command:
       - -c
       - |
-        # Use postgres12 instead of postgres
+        # --- 1. POSTGRES SETUP ---
+        # Setup Default DB
         temporal-sql-tool --plugin postgres12 --ep postgresql -p 5432 -u ${POSTGRES_USER} --pw ${POSTGRES_PASSWORD} --db temporal setup-schema -v 0.0 || true
         temporal-sql-tool --plugin postgres12 --ep postgresql -p 5432 -u ${POSTGRES_USER} --pw ${POSTGRES_PASSWORD} --db temporal update-schema -d ./schema/postgresql/v12/temporal/versioned
 
+        # Setup Visibility DB
         temporal-sql-tool --plugin postgres12 --ep postgresql -p 5432 -u ${POSTGRES_USER} --pw ${POSTGRES_PASSWORD} --db temporal_visibility setup-schema -v 0.0 || true
         temporal-sql-tool --plugin postgres12 --ep postgresql -p 5432 -u ${POSTGRES_USER} --pw ${POSTGRES_PASSWORD} --db temporal_visibility update-schema -d ./schema/postgresql/v12/visibility/versioned
 
+        # --- 2. ELASTICSEARCH SETUP ---
         echo "Waiting for Elasticsearch..."
         until curl -s http://elasticsearch:9200; do sleep 1; done
 
-        curl -s -X PUT http://elasticsearch:9200/temporal_visibility_v1_dev -H 'Content-Type: application/json' -d '{
-          "settings": {"index": {"number_of_replicas": 0}},
-          "mappings": {
-            "properties": {
-              "Namespace": {"type": "keyword"},
-              "WorkflowId": {"type": "keyword"},
-              "RunId": {"type": "keyword"},
-              "WorkflowType": {"type": "keyword"},
-              "StartTime": {"type": "date"},
-              "ExecutionTime": {"type": "date"},
-              "CloseTime": {"type": "date"},
-              "ExecutionStatus": {"type": "keyword"},
-              "HistoryLength": {"type": "long"},
-              "TaskQueue": {"type": "keyword"},
-              "NamespaceId": {"type": "keyword"},
-              "TemporalNamespaceDivision": {"type": "keyword"},
-              "TemporalScheduledById": {"type": "keyword"},
-              "TemporalScheduledStartTime": {"type": "date"},
-              "TemporalSchedulePaused": {"type": "boolean"},
-              "ExecutionDuration": {"type": "long"},
-              "StateTransitionCount": {"type": "long"},
-              "HistorySizeBytes": {"type": "long"},
-              "TemporalWorkerVersioningData": {"type": "keyword"}
-            }
-          }
-        }'
+        curl -s -X PUT http://elasticsearch:9200/_template/temporal_visibility_v1_template \
+             -H 'Content-Type: application/json' \
+             -d @/etc/temporal/schema/elasticsearch/visibility/index_template_v7.json
+        
+        echo "Creating Elasticsearch index..."
+        curl -s -X PUT http://elasticsearch:9200/temporal_visibility_v1_dev
+
+        echo "Setup complete."
 
   temporal-server:
     image: temporalio/server:1.29.2
