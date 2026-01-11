@@ -138,13 +138,13 @@ services:
       retries: 10
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.temporal-grpc.rule=Host(`${DOMAIN}`)"
-      - "traefik.http.routers.temporal-grpc.entrypoints=grpc"
-      - "traefik.http.routers.temporal-grpc.tls=true"
-      - "traefik.http.routers.temporal-grpc.tls.certresolver=myresolver"
-      - "traefik.http.services.temporal-server.loadbalancer.server.port=7233"
-      - "traefik.http.services.temporal-server.loadbalancer.server.scheme=h2c"
-      
+      - "traefik.tcp.routers.temporal-grpc.rule=HostSNI(`${DOMAIN}`)"
+      - "traefik.tcp.routers.temporal-grpc.entrypoints=grpc"
+      - "traefik.tcp.routers.temporal-grpc.tls=true"
+      - "traefik.tcp.routers.temporal-grpc.tls.certresolver=myresolver"
+      - "traefik.tcp.routers.temporal-grpc.service=temporal-grpc"
+      - "traefik.tcp.services.temporal-grpc.loadbalancer.server.port=7233"
+        
     restart: unless-stopped
     
   temporal-bootstrap:
